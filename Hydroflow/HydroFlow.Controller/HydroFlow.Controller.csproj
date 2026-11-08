@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hydroflow.Core\Hydroflow.Core.csproj" />
+    <ProjectReference Include="..\HydroFlow.Devices\HydroFlow.Devices.csproj" />
+    <ProjectReference Include="..\HydroFlow.Logging\HydroFlow.Logging.csproj" />
+  </ItemGroup>
+
+</Project>
