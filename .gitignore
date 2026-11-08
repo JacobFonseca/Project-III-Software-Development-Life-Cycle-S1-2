@@ -1,0 +1,33 @@
+# Visual Studio directories
+.vs/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Uu]ser/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# .NET Core / NuGet
+project.lock.json
+project.fragment.lock.json
+artifacts/
+nupkgs/
+*.nupkg
+.nuget/
+.ionide/
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+bld/
+
+# SQLite local databases
+*.db
+*.db-shm
+*.db-wal
