@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Hydroflow.Core
 {
-    abstract class Sensor
+    public abstract class Sensor
 
     {
 
