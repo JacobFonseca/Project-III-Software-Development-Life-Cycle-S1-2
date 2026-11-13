@@ -4,39 +4,35 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Hydroflow.Core
+namespace HydroFlow.Core;
+
+public abstract class Sensor : Device
 {
-    public abstract class Sensor
+    private readonly IDataSource _source;
+    private readonly IMessageBus _bus;
+    private TelemetryPacket _latestPacket;
+    public string Unit { get; }
 
+    protected Sensor(string deviceId, string name, string unit, IDataSource source, IMessageBus bus)
+        : base(deviceId, name)
     {
-
-        public string SensorId { get; }
-        public string SensorValue { get; }
-
-        public string SensorUnit { get; }
-
-
-      public Sensor(string sensorId, string sensorValue, string sensorUnit)
-        {
-            if (string.IsNullOrWhiteSpace(sensorId))
-                throw new ArgumentException("Sensor id is required.", nameof(sensorId));
-            if (string.IsNullOrWhiteSpace(sensorValue))
-                throw new ArgumentException("Sensor value is required.", nameof(sensorValue));
-            if (string.IsNullOrWhiteSpace(sensorUnit))
-                throw new ArgumentException("Sensor unit is required.", nameof(sensorUnit));
-            SensorId = sensorId;
-            SensorValue = sensorValue;
-            SensorUnit = sensorUnit;
-        }
-
-
-
-
-
-
-
-
-
-
+        if (string.IsNullOrWhiteSpace(unit))
+            throw new ArgumentException("Unit is required.", nameof(unit));
+        _source = source ?? throw new ArgumentNullException(nameof(source));
+        _bus = bus ?? throw new ArgumentNullException(nameof(bus));
+        Unit = unit;
+        _latestPacket = CreatePacket(0);
     }
+
+    public TelemetryPacket Tick()
+    {
+        _latestPacket = CreatePacket(_source.ReadNext());
+        _bus.Publish(_latestPacket);
+        return _latestPacket;
+    }
+
+    public override TelemetryPacket GetPacket() => _latestPacket;
+
+    private TelemetryPacket CreatePacket(double value) =>
+        new(DeviceId, "Sensor", value, Unit, DateTime.UtcNow, DeviceStatus.Normal);
 }
