@@ -30,7 +30,21 @@ namespace Hydroflow.Core
             }
         }
 
+        public double GetWaterLevel(double waterLevel)
+        {
+            double maxCapacity = 500;
 
+            return Math.Clamp(waterLevel, 0, maxCapacity);
+        }
+
+        public double GetPercentage(double waterLevel)
+        {
+            double maxCapacity = 500;
+
+            double level = GetWaterLevel(waterLevel);
+
+            return (level / maxCapacity) * 100;
+        }
 
         public double ReadLevel()
         {
@@ -43,7 +57,7 @@ namespace Hydroflow.Core
                 currentIndex = 0;
             }
 
-            return level;
+            return GetWaterLevel(level);
         }
 
         public string GetUnit()
