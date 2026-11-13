@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HydroFlow.Core;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -64,5 +65,25 @@ namespace Hydroflow.Core
         {
             return "L";
         }
+
+
+        public void PublishReading(IMessageBus bus)
+        {
+            double level = ReadLevel();
+
+
+            TelemetryPacket packet = new TelemetryPacket(
+                SensorId,
+                "Sensor",
+                level,
+                "L",
+                DateTime.Now,
+                DeviceStatus.Normal
+            );
+
+
+            bus.Publish(packet);
+        }
+
     }
 }

@@ -88,11 +88,20 @@ namespace Hydroflow.Tests
         [TestMethod]
         public void WaterLevelPercentage_DoesNotExceed100()
         {
-            WaterLevelSensor sensor = new WaterLevelSensor("WL01", filePath);
+            string path = CreateTestFile();
 
-            double result = sensor.GetPercentage(600);
+            try
+            {
+                WaterLevelSensor sensor = new WaterLevelSensor("WL01", path);
 
-            Assert.AreEqual(100.0, result);
+                double result = sensor.GetPercentage(600);
+
+                Assert.AreEqual(100.0, result);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
         }
     }
 }
