@@ -14,7 +14,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\data\par_light.txt" Link="data\par_light.txt" CopyToOutputDirectory="PreserveNewest" />
+	  <None Include="..\data\*.txt"
+      Link="data\%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
