@@ -13,4 +13,10 @@
     <ProjectReference Include="..\Hydroflow.Core\Hydroflow.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+	  <None Include="..\data\*.txt"
+      Link="data\%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
