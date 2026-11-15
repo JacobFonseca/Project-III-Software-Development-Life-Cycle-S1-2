@@ -5,8 +5,6 @@
  * Task: HF-54
  *
  * Unit tests for LEDLightController using a fake data source and a real MessageBus.
- * The Device base class, lux unit, Normal status, Green/White colours and the
- * SetColour method are provisional decisions pending team confirmation.
  */
 
 using HydroFlow.Core;
@@ -99,65 +97,160 @@ public class LEDLightControllerTests
     }
 
     /*
-     * Purpose: Confirm a new controller starts Green without reading or publishing.
+     * Purpose: Confirm a new controller starts off, Green, at 0 percent, without reading or publishing.
      */
     [TestMethod]
-    public void Constructor_ValidArguments_StartsGreenWithoutReading()
+    public void Constructor_ValidArguments_StartsOffAndGreenWithoutReadingOrPublishing()
     {
-        var source = new FakeDataSource(450);
+        var source = new FakeDataSource(75);
         var bus = new MessageBus();
         int published = 0;
         bus.Subscribe(_ => published++);
 
         var controller = new LEDLightController("LED-01", "LED Grow Light", source, bus);
 
-        Assert.AreEqual(LedColour.Green, controller.Colour);
+        Assert.IsFalse(controller.IsOn);
+        Assert.AreEqual(0.0, controller.Setting);
+        Assert.AreEqual(LedColor.Green, controller.Color);
+        Assert.AreEqual("%", controller.GetPacket().Unit);
         Assert.AreEqual(0, source.ReadCount);
         Assert.AreEqual(0, published);
     }
 
     /*
-     * Purpose: Confirm one GetPacket call reads exactly one value.
+     * Purpose: Confirm Execute turns the LED on and publishes the intensity in percent without reading.
      */
     [TestMethod]
-    public void GetPacket_ValidReading_ReadsDataSourceOnce()
+    public void Execute_OnWithIntensity_SetsStateAndPublishesPercent()
     {
-        var source = new FakeDataSource(450);
-        var controller = new LEDLightController("LED-01", "LED Grow Light", source, new MessageBus());
+        var source = new FakeDataSource(75);
+        var bus = new MessageBus();
+        var received = new List<TelemetryPacket>();
+        bus.Subscribe(p => received.Add(p));
+        var controller = new LEDLightController("LED-01", "LED Grow Light", source, bus);
 
-        controller.GetPacket();
+        controller.Execute(true, 60);
 
-        Assert.AreEqual(1, source.ReadCount);
+        Assert.IsTrue(controller.IsOn);
+        Assert.AreEqual(60.0, controller.Setting);
+        Assert.AreEqual(1, received.Count);
+        Assert.AreEqual("LED-01", received[0].DeviceId);
+        Assert.AreEqual("Actuator", received[0].Type);
+        Assert.AreEqual(60.0, received[0].Value);
+        Assert.AreEqual("%", received[0].Unit);
+        Assert.AreEqual(DeviceStatus.Normal, received[0].Status);
+        Assert.AreEqual(0, source.ReadCount);
     }
 
     /*
-     * Purpose: Confirm the packet holds the controller ID, Actuator type, value, unit and status.
+     * Purpose: Confirm Execute with off publishes 0 percent.
      */
     [TestMethod]
-    public void GetPacket_ValidReading_ReturnsPacketWithActuatorDetails()
+    public void Execute_Off_PublishesZeroPercent()
     {
-        var source = new FakeDataSource(515.5);
+        var bus = new MessageBus();
+        var received = new List<TelemetryPacket>();
+        bus.Subscribe(p => received.Add(p));
+        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(75), bus);
+
+        controller.Execute(true, 60);
+        controller.Execute(false, 0);
+
+        Assert.IsFalse(controller.IsOn);
+        Assert.AreEqual(0.0, received[^1].Value);
+    }
+
+    /*
+     * Purpose: Confirm the 0 and 100 percent limits are accepted.
+     */
+    [TestMethod]
+    [DataRow(0.0)]
+    [DataRow(100.0)]
+    public void Execute_BoundaryIntensity_IsAccepted(double intensity)
+    {
+        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(75), new MessageBus());
+
+        controller.Execute(true, intensity);
+
+        Assert.AreEqual(intensity, controller.Setting);
+        Assert.AreEqual(intensity, controller.GetPacket().Value);
+    }
+
+    /*
+     * Purpose: Confirm an intensity outside 0 to 100 percent is rejected, the previous state is kept,
+     * and nothing is published.
+     */
+    [TestMethod]
+    [DataRow(-1.0)]
+    [DataRow(100.5)]
+    [DataRow(150.0)]
+    [DataRow(double.NaN)]
+    public void Execute_IntensityOutOfRange_ThrowsAndKeepsState(double intensity)
+    {
+        var bus = new MessageBus();
+        int published = 0;
+        bus.Subscribe(_ => published++);
+        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(75), bus);
+        controller.Execute(true, 50);
+
+        Assert.IsTrue(Throws<ArgumentOutOfRangeException>(() => controller.Execute(true, intensity)));
+
+        Assert.IsTrue(controller.IsOn);
+        Assert.AreEqual(50.0, controller.Setting);
+        Assert.AreEqual(1, published);
+    }
+
+    /*
+     * Purpose: Confirm Tick publishes 0 percent without reading while the LED is off.
+     */
+    [TestMethod]
+    public void Tick_WhenOff_PublishesZeroWithoutReading()
+    {
+        var source = new FakeDataSource(75);
+        var bus = new MessageBus();
+        var received = new List<TelemetryPacket>();
+        bus.Subscribe(p => received.Add(p));
+        var controller = new LEDLightController("LED-01", "LED Grow Light", source, bus);
+
+        TelemetryPacket packet = controller.Tick();
+
+        Assert.AreEqual(0.0, packet.Value);
+        Assert.AreEqual("%", packet.Unit);
+        Assert.AreEqual(0, source.ReadCount);
+        Assert.AreEqual(1, received.Count);
+    }
+
+    /*
+     * Purpose: Confirm Tick reads one feedback value while on and publishes it in percent.
+     */
+    [TestMethod]
+    public void Tick_WhenOn_PublishesFeedbackPercent()
+    {
+        var source = new FakeDataSource(82.5);
         var controller = new LEDLightController("LED-01", "LED Grow Light", source, new MessageBus());
+        controller.Execute(true, 80);
 
-        TelemetryPacket packet = controller.GetPacket();
+        TelemetryPacket packet = controller.Tick();
 
+        Assert.AreEqual(1, source.ReadCount);
         Assert.AreEqual("LED-01", packet.DeviceId);
         Assert.AreEqual("Actuator", packet.Type);
-        Assert.AreEqual(515.5, packet.Value);
-        Assert.AreEqual("lux", packet.Unit);
+        Assert.AreEqual(82.5, packet.Value);
+        Assert.AreEqual("%", packet.Unit);
         Assert.AreEqual(DeviceStatus.Normal, packet.Status);
     }
 
     /*
-     * Purpose: Confirm the timestamp is UTC and taken during the GetPacket call.
+     * Purpose: Confirm the timestamp is UTC and taken during the Tick call.
      */
     [TestMethod]
-    public void GetPacket_ValidReading_TimestampIsCurrentUtc()
+    public void Tick_WhenOn_TimestampIsCurrentUtc()
     {
-        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(450), new MessageBus());
+        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(75), new MessageBus());
+        controller.Execute(true, 80);
 
         DateTime before = DateTime.UtcNow;
-        TelemetryPacket packet = controller.GetPacket();
+        TelemetryPacket packet = controller.Tick();
         DateTime after = DateTime.UtcNow;
 
         Assert.AreEqual(DateTimeKind.Utc, packet.Timestamp.Kind);
@@ -165,66 +258,89 @@ public class LEDLightControllerTests
     }
 
     /*
-     * Purpose: Confirm each GetPacket call returns the next value from the data source.
+     * Purpose: Confirm each Tick while on returns the next value from the data source.
      */
     [TestMethod]
-    public void GetPacket_CalledRepeatedly_ReadsSuccessiveValues()
+    public void Tick_CalledRepeatedly_ReadsSuccessiveValues()
     {
-        var source = new FakeDataSource(450, 480, 515);
+        var source = new FakeDataSource(75, 80, 85);
         var controller = new LEDLightController("LED-01", "LED Grow Light", source, new MessageBus());
+        controller.Execute(true, 80);
 
-        Assert.AreEqual(450.0, controller.GetPacket().Value);
-        Assert.AreEqual(480.0, controller.GetPacket().Value);
-        Assert.AreEqual(515.0, controller.GetPacket().Value);
+        Assert.AreEqual(75.0, controller.Tick().Value);
+        Assert.AreEqual(80.0, controller.Tick().Value);
+        Assert.AreEqual(85.0, controller.Tick().Value);
         Assert.AreEqual(3, source.ReadCount);
     }
 
     /*
-     * Purpose: Confirm GetPacket only builds a packet and does not publish it.
+     * Purpose: Confirm polling after commands keeps the on state, intensity setting and colour.
      */
     [TestMethod]
-    public void GetPacket_WithSubscriber_DoesNotPublish()
+    public void Tick_AfterCommands_KeepsCommandedState()
     {
-        var bus = new MessageBus();
-        int published = 0;
-        bus.Subscribe(_ => published++);
-        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(450), bus);
+        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(75, 80, 85), new MessageBus());
+        controller.SetColor(LedColor.White);
+        controller.Execute(true, 80);
 
-        controller.GetPacket();
+        controller.Tick();
+        controller.Tick();
+        controller.Tick();
 
-        Assert.AreEqual(0, published);
+        Assert.IsTrue(controller.IsOn);
+        Assert.AreEqual(80.0, controller.Setting);
+        Assert.AreEqual(LedColor.White, controller.Color);
     }
 
     /*
-     * Purpose: Confirm PublishReading reads once and sends the same single packet to every subscriber.
+     * Purpose: Confirm GetPacket returns the packet from the last Tick
+     * without reading the data source or publishing again.
      */
     [TestMethod]
-    public void PublishReading_MultipleSubscribers_DeliversOnePacketToEach()
+    public void GetPacket_AfterTick_ReturnsSamePacketWithoutReadingOrPublishing()
     {
-        var source = new FakeDataSource(450);
+        var source = new FakeDataSource(75);
+        var bus = new MessageBus();
+        int published = 0;
+        bus.Subscribe(_ => published++);
+        var controller = new LEDLightController("LED-01", "LED Grow Light", source, bus);
+        controller.Execute(true, 80);
+
+        TelemetryPacket ticked = controller.Tick();
+        TelemetryPacket cached = controller.GetPacket();
+
+        Assert.AreSame(ticked, cached);
+        Assert.AreEqual(1, source.ReadCount);
+        Assert.AreEqual(2, published);
+    }
+
+    /*
+     * Purpose: Confirm Tick sends the packet it returns to every subscriber.
+     */
+    [TestMethod]
+    public void Tick_MultipleSubscribers_DeliversReturnedPacketToEach()
+    {
         var bus = new MessageBus();
         var firstReceived = new List<TelemetryPacket>();
         var secondReceived = new List<TelemetryPacket>();
         bus.Subscribe(p => firstReceived.Add(p));
         bus.Subscribe(p => secondReceived.Add(p));
-        var controller = new LEDLightController("LED-01", "LED Grow Light", source, bus);
+        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(75), bus);
 
-        controller.PublishReading();
+        TelemetryPacket returned = controller.Tick();
 
-        Assert.AreEqual(1, source.ReadCount);
         Assert.AreEqual(1, firstReceived.Count);
         Assert.AreEqual(1, secondReceived.Count);
-        Assert.AreSame(firstReceived[0], secondReceived[0]);
-        Assert.AreEqual("LED-01", firstReceived[0].DeviceId);
-        Assert.AreEqual(450.0, firstReceived[0].Value);
+        Assert.AreSame(returned, firstReceived[0]);
+        Assert.AreSame(returned, secondReceived[0]);
     }
 
     /*
      * Purpose: Confirm an exception from the data source reaches the caller unchanged
-     * and nothing is published.
+     * and Tick publishes nothing.
      */
     [TestMethod]
-    public void PublishReading_DataSourceThrows_PropagatesExceptionAndPublishesNothing()
+    public void Tick_DataSourceThrows_PropagatesExceptionAndPublishesNothing()
     {
         var expected = new InvalidOperationException("Data source failed.");
         var source = new FakeDataSource { ExceptionToThrow = expected };
@@ -232,10 +348,11 @@ public class LEDLightControllerTests
         int published = 0;
         bus.Subscribe(_ => published++);
         var controller = new LEDLightController("LED-01", "LED Grow Light", source, bus);
+        controller.Execute(true, 80);
 
         try
         {
-            controller.PublishReading();
+            controller.Tick();
             Assert.Fail("Expected exception");
         }
         catch (InvalidOperationException ex)
@@ -244,90 +361,68 @@ public class LEDLightControllerTests
         }
 
         Assert.AreEqual(1, source.ReadCount);
-        Assert.AreEqual(0, published);
+        Assert.AreEqual(1, published);
     }
 
     /*
-     * Purpose: Confirm SetColour accepts each supported colour.
+     * Purpose: Confirm SetColor accepts each supported colour.
      */
     [TestMethod]
-    [DataRow(LedColour.Green)]
-    [DataRow(LedColour.White)]
-    public void SetColour_SupportedColour_ChangesColour(LedColour colour)
+    [DataRow(LedColor.Green)]
+    [DataRow(LedColor.White)]
+    public void SetColor_SupportedColor_ChangesColor(LedColor color)
     {
-        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(450), new MessageBus());
+        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(75), new MessageBus());
 
-        controller.SetColour(colour);
+        controller.SetColor(color);
 
-        Assert.AreEqual(colour, controller.Colour);
+        Assert.AreEqual(color, controller.Color);
     }
 
     /*
      * Purpose: Confirm the SRS story change from Green to White and back works in sequence.
      */
     [TestMethod]
-    public void SetColour_GreenToWhiteAndBack_TracksLatestCommand()
+    public void SetColor_GreenToWhiteAndBack_TracksLatestCommand()
     {
-        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(450), new MessageBus());
+        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(75), new MessageBus());
 
-        controller.SetColour(LedColour.White);
-        Assert.AreEqual(LedColour.White, controller.Colour);
+        controller.SetColor(LedColor.White);
+        Assert.AreEqual(LedColor.White, controller.Color);
 
-        controller.SetColour(LedColour.Green);
-        Assert.AreEqual(LedColour.Green, controller.Colour);
+        controller.SetColor(LedColor.Green);
+        Assert.AreEqual(LedColor.Green, controller.Color);
     }
 
     /*
      * Purpose: Confirm an undefined colour is rejected and the current colour is kept.
      */
     [TestMethod]
-    public void SetColour_UndefinedColour_ThrowsAndKeepsCurrentColour()
+    public void SetColor_UndefinedColor_ThrowsAndKeepsCurrentColor()
     {
-        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(450), new MessageBus());
-        controller.SetColour(LedColour.White);
+        var controller = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(75), new MessageBus());
+        controller.SetColor(LedColor.White);
 
-        Assert.IsTrue(Throws<ArgumentOutOfRangeException>(() => controller.SetColour((LedColour)99)));
-        Assert.AreEqual(LedColour.White, controller.Colour);
+        Assert.IsTrue(Throws<ArgumentOutOfRangeException>(() => controller.SetColor((LedColor)99)));
+        Assert.AreEqual(LedColor.White, controller.Color);
     }
 
     /*
-     * Purpose: Confirm a colour command does not consume a reading or publish a packet.
+     * Purpose: Confirm a colour command does not read the data source or publish a packet.
      */
     [TestMethod]
-    public void SetColour_WithSubscriber_DoesNotReadOrPublish()
+    public void SetColor_WithSubscriber_DoesNotReadOrPublish()
     {
-        var source = new FakeDataSource(450);
+        var source = new FakeDataSource(75);
         var bus = new MessageBus();
         int published = 0;
         bus.Subscribe(_ => published++);
         var controller = new LEDLightController("LED-01", "LED Grow Light", source, bus);
 
-        controller.SetColour(LedColour.White);
+        controller.SetColor(LedColor.White);
 
         Assert.AreEqual(0, source.ReadCount);
         Assert.AreEqual(0, published);
-    }
-
-    /*
-     * Purpose: Confirm polling after a command keeps the commanded colour and
-     * continues reading the next simulated values.
-     */
-    [TestMethod]
-    public void PublishReading_AfterSetColour_KeepsCommandedColour()
-    {
-        var source = new FakeDataSource(450, 480, 515);
-        var bus = new MessageBus();
-        var received = new List<TelemetryPacket>();
-        bus.Subscribe(p => received.Add(p));
-        var controller = new LEDLightController("LED-01", "LED Grow Light", source, bus);
-
-        controller.PublishReading();
-        controller.SetColour(LedColour.White);
-        controller.PublishReading();
-        controller.PublishReading();
-
-        Assert.AreEqual(LedColour.White, controller.Colour);
-        CollectionAssert.AreEqual(new[] { 450.0, 480.0, 515.0 }, received.Select(p => p.Value).ToArray());
     }
 
     // Same helper as in CoreTests.cs so tests work on any MSTest version.

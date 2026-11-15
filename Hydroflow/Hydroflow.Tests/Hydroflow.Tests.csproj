@@ -25,7 +25,7 @@
 
   <ItemGroup>
     <None Include="..\data\par_light.txt" Link="data\par_light.txt" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\data\led_light.txt" Link="data\led_light.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\data\led_intensity.txt" Link="data\led_intensity.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
