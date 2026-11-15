@@ -4,57 +4,21 @@
  * Project: HydroFlow SCADA
  * Task: HF-53
  *
- * Reads simulated light levels from a data source and publishes
- * telemetry packets through the MessageBus.
- *
- * Temporary assumptions pending team confirmation:
- * Inherits from Device, uses lux, and reports Normal status.
+ * PAR light sensor that reports simulated light levels in lux through the shared Sensor base class.
  */
 
 using HydroFlow.Core;
 
 namespace HydroFlow.Devices;
 
-public class PARLightSensor : Device
+public class PARLightSensor : Sensor
 {
-    // Type and unit included in each reading.
-    private const string SensorType = "Sensor";
-    private const string Unit = "lux";
-
-    // Data source for readings and message bus for publishing.
-    private readonly IDataSource _dataSource;
-    private readonly IMessageBus _messageBus;
-
     /*
      * Purpose: Set up the sensor with its ID, name, data source, and message bus.
+     * Sensor handles validation, reading, caching, and publishing, using lux as the unit.
      */
     public PARLightSensor(string deviceId, string name, IDataSource dataSource, IMessageBus messageBus)
-        : base(deviceId, name)
+        : base(deviceId, name, "lux", dataSource, messageBus)
     {
-        // Check both dependencies before storing them.
-        ArgumentNullException.ThrowIfNull(dataSource);
-        ArgumentNullException.ThrowIfNull(messageBus);
-
-        _dataSource = dataSource;
-        _messageBus = messageBus;
-    }
-
-    /*
-     * Purpose: Read the next value and package it with the sensor details.
-     * Reports Normal until the controller evaluates the reading.
-     */
-    public override TelemetryPacket GetPacket()
-    {
-        double value = _dataSource.ReadNext();
-        return new TelemetryPacket(DeviceId, SensorType, value, Unit, DateTime.UtcNow, DeviceStatus.Normal);
-    }
-
-    /*
-     * Purpose: Publish one reading when called by the external polling code.
-     */
-    public void PublishReading()
-    {
-        TelemetryPacket packet = GetPacket();
-        _messageBus.Publish(packet);
     }
 }
