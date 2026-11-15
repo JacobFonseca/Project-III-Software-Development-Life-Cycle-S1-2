@@ -183,6 +183,7 @@ public class LEDLightControllerTests
     [TestMethod]
     [DataRow(-1.0)]
     [DataRow(100.5)]
+    [DataRow(101.0)]
     [DataRow(150.0)]
     [DataRow(double.NaN)]
     public void Execute_IntensityOutOfRange_ThrowsAndKeepsState(double intensity)
@@ -198,6 +199,47 @@ public class LEDLightControllerTests
         Assert.IsTrue(controller.IsOn);
         Assert.AreEqual(50.0, controller.Setting);
         Assert.AreEqual(1, published);
+    }
+
+    /*
+     * Purpose: Confirm a valid command sent through an Actuator reference turns the LED on
+     * and publishes the intensity in percent.
+     */
+    [TestMethod]
+    public void Execute_ThroughActuatorReference_ValidCommandPublishesPercent()
+    {
+        var bus = new MessageBus();
+        var received = new List<TelemetryPacket>();
+        bus.Subscribe(p => received.Add(p));
+        Actuator actuator = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(75), bus);
+
+        actuator.Execute(true, 60);
+
+        Assert.IsTrue(actuator.IsOn);
+        Assert.AreEqual(60.0, actuator.Setting);
+        Assert.AreEqual(1, received.Count);
+        Assert.AreEqual(60.0, received[0].Value);
+        Assert.AreEqual("%", received[0].Unit);
+    }
+
+    /*
+     * Purpose: Document the known validation gap. Actuator.Execute is not virtual, so an
+     * out-of-range intensity sent through an Actuator reference is accepted and published.
+     * Update this test when Actuator adds a validation hook and the LED rejects it here too.
+     */
+    [TestMethod]
+    public void Execute_ThroughActuatorReference_BypassesLedRangeCheck()
+    {
+        var bus = new MessageBus();
+        var received = new List<TelemetryPacket>();
+        bus.Subscribe(p => received.Add(p));
+        Actuator actuator = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(75), bus);
+
+        actuator.Execute(true, 101);
+
+        Assert.AreEqual(101.0, actuator.Setting);
+        Assert.AreEqual(1, received.Count);
+        Assert.AreEqual(101.0, received[0].Value);
     }
 
     /*
