@@ -1,7 +1,6 @@
-﻿
-using HydroFlow.Core;
+﻿using HydroFlow.Core;
 
-namespace HydroFlow.Devices;
+namespace HydroFlow.Devices.Nutrients;
 
 public class NutrientDosingPump : Actuator
 {
