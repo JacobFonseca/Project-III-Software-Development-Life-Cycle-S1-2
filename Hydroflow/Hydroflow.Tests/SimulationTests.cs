@@ -25,4 +25,14 @@ public class SimulationTests
         sim.Tick();
         Assert.AreEqual(sim.Sensors.Count + sim.Actuators.Count, ids.Count);
     }
+
+    [TestMethod]
+    public void Tick_Publishes12UniqueDevices()
+    {
+        var sim = new Simulation(_ => new FakeSource());
+        var ids = new HashSet<string>();
+        sim.Bus.Subscribe(p => ids.Add(p.DeviceId));
+        sim.Tick();
+        Assert.AreEqual(12, ids.Count);
+    }
 }
