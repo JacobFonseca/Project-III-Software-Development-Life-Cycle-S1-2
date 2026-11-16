@@ -39,7 +39,7 @@ public class Simulation
         // _actuators.Add(new NutrientDosingPump("NUT-01", "Nutrient Pump", sourceFor("nutrient_pump.txt"), Bus));
 
         // Lighting (Jacob)
-        // _sensors.Add(new PARLightSensor("PAR-01", "PAR Light", sourceFor("par_light.txt"), Bus));
+        _sensors.Add(new PARLightSensor("PAR-01", "PAR Light", sourceFor("par_light.txt"), Bus));
         // _actuators.Add(new LEDLightController("LED-01", "LED Lights", sourceFor("led_intensity.txt"), Bus));
     }
 
