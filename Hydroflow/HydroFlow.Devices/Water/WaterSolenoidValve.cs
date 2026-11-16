@@ -16,4 +16,12 @@ public class WaterSolenoidValve : Actuator
         : base(deviceId, name, "state", source, bus)
     {
     }
+
+    protected override void ValidateSetting(double setting)
+    {
+        if (setting < 0 || setting > 100)
+            throw new ArgumentOutOfRangeException(nameof(setting), "Valve opening must be 0-100%.");
+    }
+
+
 }
