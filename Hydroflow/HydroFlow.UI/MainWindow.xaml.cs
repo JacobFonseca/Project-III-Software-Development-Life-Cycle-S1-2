@@ -9,7 +9,9 @@
 
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Threading;
 using HydroFlow.Core;
+using HydroFlow.Devices;
 
 namespace HydroFlow.UI
 {
@@ -21,6 +23,9 @@ namespace HydroFlow.UI
         // IMessageBus has no Unsubscribe, so packets that arrive after the window closes are ignored.
         private bool _isClosed;
 
+        // The window owns the only tick loop, because Simulation has no timer of its own.
+        private DispatcherTimer? _timer;
+
         /*
          * Purpose: Set up the window and connect the readings table to its rows.
          */
@@ -28,12 +33,31 @@ namespace HydroFlow.UI
         {
             InitializeComponent();
             ReadingsGrid.ItemsSource = _readings;
-            Closed += (_, _) => _isClosed = true;
+            Closed += OnWindowClosed;
+        }
+
+        /*
+         * Purpose: Show the simulation's packets and tick every device once per second.
+         * The window subscribes before the first tick so no reading is missed.
+         */
+        public void Start(Simulation simulation)
+        {
+            ArgumentNullException.ThrowIfNull(simulation);
+
+            // Only one tick loop may run.
+            if (_timer is not null)
+                throw new InvalidOperationException("The simulation is already running.");
+
+            ShowReadingsFrom(simulation.Bus);
+
+            _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _timer.Tick += (_, _) => simulation.Tick();
+            _timer.Start();
         }
 
         /*
          * Purpose: Start showing packets published on the given message bus.
-         * Application setup calls this once the device simulation is available.
+         * Start calls this before the first tick.
          */
         public void ShowReadingsFrom(IMessageBus bus)
         {
@@ -67,6 +91,15 @@ namespace HydroFlow.UI
 
             _readings.Add(packet);
             EmptyMessage.Visibility = Visibility.Collapsed;
+        }
+
+        /*
+         * Purpose: Stop the tick loop and ignore any later packets once the window closes.
+         */
+        private void OnWindowClosed(object? sender, EventArgs e)
+        {
+            _isClosed = true;
+            _timer?.Stop();
         }
     }
 }
