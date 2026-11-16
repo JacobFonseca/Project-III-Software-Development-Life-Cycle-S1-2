@@ -1,10 +1,13 @@
 ﻿using HydroFlow.Core;
 using HydroFlow.Devices.Water;
+using HydroFlow.Devices.Nutrients;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+
 namespace HydroFlow.Devices;
 
 public class Simulation
@@ -31,16 +34,16 @@ public class Simulation
         _sensors.Add(new WaterTempSensor("WT-01", "Water Temperature", sourceFor("water_temp.txt"), Bus));
         _actuators.Add(new WaterSolenoidValve("VLV-01", "Water Valve", sourceFor("water_solenoid_valve.txt"), Bus));
 
-        // Uncomment each line only after that teammate's PR is merged and the build passes:
+       
         // Nutrient (Kadeema)
-        // _sensors.Add(new pHSensor("PH-01", "pH Sensor", sourceFor("ph.txt"), Bus));
-        // _actuators.Add(new pHDosingPump("PHP-01", "pH Dosing Pump", sourceFor("ph_pump.txt"), Bus));
-        // _sensors.Add(new NutrientECSensor("EC-01", "Nutrient EC", sourceFor("ec.txt"), Bus));
-        // _actuators.Add(new NutrientDosingPump("NUT-01", "Nutrient Pump", sourceFor("nutrient_pump.txt"), Bus));
+        _sensors.Add(new pHSensor("PH-01", "pH Sensor", sourceFor("ph.txt"), Bus));
+        _actuators.Add(new pHDosingPump("PHP-01", "pH Dosing Pump", sourceFor("ph_pump.txt"), Bus));
+        _sensors.Add(new NutrientECSensor("EC-01", "Nutrient EC", sourceFor("ec.txt"), Bus));
+        _actuators.Add(new NutrientDosingPump("NUT-01", "Nutrient Pump", sourceFor("nutrient_pump.txt"), Bus));
 
         // Lighting (Jacob)
         _sensors.Add(new PARLightSensor("PAR-01", "PAR Light", sourceFor("par_light.txt"), Bus));
-        // _actuators.Add(new LEDLightController("LED-01", "LED Lights", sourceFor("led_intensity.txt"), Bus));
+        _actuators.Add(new LEDLightController("LED-01", "LED Lights", sourceFor("led_intensity.txt"), Bus));
     }
 
     public void Tick()
