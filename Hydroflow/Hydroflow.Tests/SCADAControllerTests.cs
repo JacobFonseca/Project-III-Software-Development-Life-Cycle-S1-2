@@ -7,7 +7,8 @@ using System.Threading.Tasks;
 
 namespace Hydroflow.Tests
 {
-    internal class SCADAController
+    [TestClass]
+    public class SCADAControllerTests
     {
         [TestMethod]
         public void UnknownDevice_ReturnsNull()
