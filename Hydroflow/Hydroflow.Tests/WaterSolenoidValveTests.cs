@@ -146,5 +146,50 @@ namespace HydroFlow.Tests
                 File.Delete(path);
             }
         }
+
+        [TestMethod]
+        public void Execute_Over100_Throws()
+        {
+            string path = Path.GetTempFileName();
+
+            try
+            {
+                File.WriteAllText(path, "1");
+
+                var valve = new WaterSolenoidValve(
+                    "VALVE01", "Water Valve", new LoopingFileReader(path), new MessageBus());
+
+                Assert.ThrowsException<ArgumentOutOfRangeException>(
+                    () => valve.Execute(true, 101));
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [TestMethod]
+        public void Execute_100_DoesNotThrow()
+        {
+            string path = Path.GetTempFileName();
+
+            try
+            {
+                File.WriteAllText(path, "1");
+
+                var valve = new WaterSolenoidValve(
+                    "VALVE01", "Water Valve", new LoopingFileReader(path), new MessageBus());
+
+                valve.Execute(true, 100);
+
+                Assert.AreEqual(100.0, valve.Setting);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+
     }
 }
