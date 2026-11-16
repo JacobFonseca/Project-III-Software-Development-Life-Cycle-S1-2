@@ -5,8 +5,6 @@
  * Task: HF-53
  *
  * Unit tests for PARLightSensor using a fake data source and a real MessageBus.
- * The Device base class, lux unit and Normal status are provisional
- * integration decisions pending team confirmation.
  */
 
 using HydroFlow.Core;
@@ -99,29 +97,29 @@ public class PARLightSensorTests
     }
 
     /*
-     * Purpose: Confirm one GetPacket call reads exactly one value.
+     * Purpose: Confirm one Tick call reads exactly one value.
      */
     [TestMethod]
-    public void GetPacket_ValidReading_ReadsDataSourceOnce()
+    public void Tick_ValidReading_ReadsDataSourceOnce()
     {
         var source = new FakeDataSource(350.5);
         var sensor = new PARLightSensor("PAR-01", "PAR Light Sensor", source, new MessageBus());
 
-        sensor.GetPacket();
+        sensor.Tick();
 
         Assert.AreEqual(1, source.ReadCount);
     }
 
     /*
-     * Purpose: Confirm the packet holds the sensor ID, type, value, unit and status.
+     * Purpose: Confirm the packet from Tick holds the sensor ID, type, value, unit and status.
      */
     [TestMethod]
-    public void GetPacket_ValidReading_ReturnsPacketWithSensorDetails()
+    public void Tick_ValidReading_ReturnsPacketWithSensorDetails()
     {
         var source = new FakeDataSource(350.5);
         var sensor = new PARLightSensor("PAR-01", "PAR Light Sensor", source, new MessageBus());
 
-        TelemetryPacket packet = sensor.GetPacket();
+        TelemetryPacket packet = sensor.Tick();
 
         Assert.AreEqual("PAR-01", packet.DeviceId);
         Assert.AreEqual("Sensor", packet.Type);
@@ -131,15 +129,15 @@ public class PARLightSensorTests
     }
 
     /*
-     * Purpose: Confirm the timestamp is UTC and taken during the GetPacket call.
+     * Purpose: Confirm the timestamp is UTC and taken during the Tick call.
      */
     [TestMethod]
-    public void GetPacket_ValidReading_TimestampIsCurrentUtc()
+    public void Tick_ValidReading_TimestampIsCurrentUtc()
     {
         var sensor = new PARLightSensor("PAR-01", "PAR Light Sensor", new FakeDataSource(350.5), new MessageBus());
 
         DateTime before = DateTime.UtcNow;
-        TelemetryPacket packet = sensor.GetPacket();
+        TelemetryPacket packet = sensor.Tick();
         DateTime after = DateTime.UtcNow;
 
         Assert.AreEqual(DateTimeKind.Utc, packet.Timestamp.Kind);
@@ -147,41 +145,46 @@ public class PARLightSensorTests
     }
 
     /*
-     * Purpose: Confirm each GetPacket call returns the next value from the data source.
+     * Purpose: Confirm each Tick call returns the next value from the data source.
      */
     [TestMethod]
-    public void GetPacket_CalledRepeatedly_ReadsSuccessiveValues()
+    public void Tick_CalledRepeatedly_ReadsSuccessiveValues()
     {
         var source = new FakeDataSource(100, 200, 300);
         var sensor = new PARLightSensor("PAR-01", "PAR Light Sensor", source, new MessageBus());
 
-        Assert.AreEqual(100.0, sensor.GetPacket().Value);
-        Assert.AreEqual(200.0, sensor.GetPacket().Value);
-        Assert.AreEqual(300.0, sensor.GetPacket().Value);
+        Assert.AreEqual(100.0, sensor.Tick().Value);
+        Assert.AreEqual(200.0, sensor.Tick().Value);
+        Assert.AreEqual(300.0, sensor.Tick().Value);
         Assert.AreEqual(3, source.ReadCount);
     }
 
     /*
-     * Purpose: Confirm GetPacket only builds a packet and does not publish it.
+     * Purpose: Confirm GetPacket returns the packet from the last Tick
+     * without reading the data source or publishing again.
      */
     [TestMethod]
-    public void GetPacket_WithSubscriber_DoesNotPublish()
+    public void GetPacket_AfterTick_ReturnsSamePacketWithoutReadingOrPublishing()
     {
+        var source = new FakeDataSource(350.5);
         var bus = new MessageBus();
         int published = 0;
         bus.Subscribe(_ => published++);
-        var sensor = new PARLightSensor("PAR-01", "PAR Light Sensor", new FakeDataSource(350.5), bus);
+        var sensor = new PARLightSensor("PAR-01", "PAR Light Sensor", source, bus);
 
-        sensor.GetPacket();
+        TelemetryPacket ticked = sensor.Tick();
+        TelemetryPacket cached = sensor.GetPacket();
 
-        Assert.AreEqual(0, published);
+        Assert.AreSame(ticked, cached);
+        Assert.AreEqual(1, source.ReadCount);
+        Assert.AreEqual(1, published);
     }
 
     /*
-     * Purpose: Confirm PublishReading reads once and sends the same single packet to every subscriber.
+     * Purpose: Confirm Tick reads once and sends the packet it returns to every subscriber.
      */
     [TestMethod]
-    public void PublishReading_MultipleSubscribers_DeliversOnePacketToEach()
+    public void Tick_MultipleSubscribers_DeliversReturnedPacketToEach()
     {
         var source = new FakeDataSource(350.5);
         var bus = new MessageBus();
@@ -191,14 +194,13 @@ public class PARLightSensorTests
         bus.Subscribe(p => secondReceived.Add(p));
         var sensor = new PARLightSensor("PAR-01", "PAR Light Sensor", source, bus);
 
-        sensor.PublishReading();
+        TelemetryPacket returned = sensor.Tick();
 
         Assert.AreEqual(1, source.ReadCount);
         Assert.AreEqual(1, firstReceived.Count);
         Assert.AreEqual(1, secondReceived.Count);
-        Assert.AreSame(firstReceived[0], secondReceived[0]);
-        Assert.AreEqual("PAR-01", firstReceived[0].DeviceId);
-        Assert.AreEqual(350.5, firstReceived[0].Value);
+        Assert.AreSame(returned, firstReceived[0]);
+        Assert.AreSame(returned, secondReceived[0]);
     }
 
     /*
@@ -206,7 +208,7 @@ public class PARLightSensorTests
      * and nothing is published.
      */
     [TestMethod]
-    public void PublishReading_DataSourceThrows_PropagatesExceptionAndPublishesNothing()
+    public void Tick_DataSourceThrows_PropagatesExceptionAndPublishesNothing()
     {
         var expected = new InvalidOperationException("Data source failed.");
         var source = new FakeDataSource { ExceptionToThrow = expected };
@@ -217,7 +219,7 @@ public class PARLightSensorTests
 
         try
         {
-            sensor.PublishReading();
+            sensor.Tick();
             Assert.Fail("Expected exception");
         }
         catch (InvalidOperationException ex)
