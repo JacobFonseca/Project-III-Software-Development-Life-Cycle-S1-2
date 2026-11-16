@@ -186,6 +186,8 @@ public class LEDLightControllerTests
     [DataRow(101.0)]
     [DataRow(150.0)]
     [DataRow(double.NaN)]
+    [DataRow(double.PositiveInfinity)]
+    [DataRow(double.NegativeInfinity)]
     public void Execute_IntensityOutOfRange_ThrowsAndKeepsState(double intensity)
     {
         var bus = new MessageBus();
@@ -223,23 +225,25 @@ public class LEDLightControllerTests
     }
 
     /*
-     * Purpose: Document the known validation gap. Actuator.Execute is not virtual, so an
-     * out-of-range intensity sent through an Actuator reference is accepted and published.
-     * Update this test when Actuator adds a validation hook and the LED rejects it here too.
+     * Purpose: Confirm an out-of-range intensity sent through an Actuator reference is rejected
+     * by the ValidateSetting hook, keeps the previous state and cached packet, and publishes nothing.
      */
     [TestMethod]
-    public void Execute_ThroughActuatorReference_BypassesLedRangeCheck()
+    public void Execute_ThroughActuatorReference_RejectsOutOfRangeAndKeepsState()
     {
         var bus = new MessageBus();
         var received = new List<TelemetryPacket>();
         bus.Subscribe(p => received.Add(p));
         Actuator actuator = new LEDLightController("LED-01", "LED Grow Light", new FakeDataSource(75), bus);
+        actuator.Execute(true, 50);
+        TelemetryPacket before = actuator.GetPacket();
 
-        actuator.Execute(true, 101);
+        Assert.IsTrue(Throws<ArgumentOutOfRangeException>(() => actuator.Execute(true, 101)));
 
-        Assert.AreEqual(101.0, actuator.Setting);
+        Assert.IsTrue(actuator.IsOn);
+        Assert.AreEqual(50.0, actuator.Setting);
+        Assert.AreSame(before, actuator.GetPacket());
         Assert.AreEqual(1, received.Count);
-        Assert.AreEqual(101.0, received[0].Value);
     }
 
     /*
@@ -280,6 +284,28 @@ public class LEDLightControllerTests
         Assert.AreEqual(82.5, packet.Value);
         Assert.AreEqual("%", packet.Unit);
         Assert.AreEqual(DeviceStatus.Normal, packet.Status);
+    }
+
+    /*
+     * Purpose: Confirm feedback outside 0 to 100 percent is still published unchanged by Tick,
+     * because validation applies only to Execute commands.
+     */
+    [TestMethod]
+    public void Tick_WhenOnWithOutOfRangeFeedback_PublishesFeedbackUnchanged()
+    {
+        var source = new FakeDataSource(120);
+        var bus = new MessageBus();
+        var received = new List<TelemetryPacket>();
+        bus.Subscribe(p => received.Add(p));
+        var controller = new LEDLightController("LED-01", "LED Grow Light", source, bus);
+        controller.Execute(true, 80);
+
+        TelemetryPacket packet = controller.Tick();
+
+        Assert.AreEqual(120.0, packet.Value);
+        Assert.AreEqual(1, source.ReadCount);
+        Assert.AreSame(packet, received[^1]);
+        Assert.AreEqual(2, received.Count);
     }
 
     /*

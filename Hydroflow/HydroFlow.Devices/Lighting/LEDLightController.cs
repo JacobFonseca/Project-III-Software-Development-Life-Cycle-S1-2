@@ -28,18 +28,14 @@ public class LEDLightController : Actuator
     }
 
     /*
-     * Purpose: Turn the LED on or off at an intensity from 0 to 100 percent.
-     * Actuator does not check the range, so it is checked here before the base call.
-     * Actuator.Execute is not virtual, so calls through an Actuator reference skip this check
-     * until Actuator offers a validation hook.
+     * Purpose: Reject an LED intensity outside 0 to 100 percent.
+     * Actuator.Execute calls this first, so the check also applies through an Actuator reference.
      */
-    public new void Execute(bool on, double intensity)
+    protected override void ValidateSetting(double setting)
     {
-        // Written this way so NaN is rejected too.
-        if (!(intensity >= 0 && intensity <= 100))
-            throw new ArgumentOutOfRangeException(nameof(intensity), intensity, "LED intensity must be from 0 to 100 percent.");
-
-        base.Execute(on, intensity);
+        // Written this way so NaN is rejected too. Infinities fall outside the range.
+        if (!(setting >= 0 && setting <= 100))
+            throw new ArgumentOutOfRangeException(nameof(setting), setting, "LED intensity must be from 0 to 100 percent.");
     }
 
     /*
