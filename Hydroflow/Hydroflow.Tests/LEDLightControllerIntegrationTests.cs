@@ -16,7 +16,7 @@ namespace HydroFlow.Tests;
 public class LEDLightControllerIntegrationTests
 {
     /*
-     * Purpose: Confirm an Execute command publishes the setting, seven Tick calls then publish
+     * Purpose: Confirm an Execute command publishes the setting, nine Tick calls then publish
      * percent feedback that follows the sample file in order and wraps, and a colour change
      * during polling is kept.
      */
@@ -39,11 +39,11 @@ public class LEDLightControllerIntegrationTests
         // SRS lighting story: change the LED from green to white while polling continues.
         controller.SetColor(LedColor.White);
 
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 7; i++)
             controller.Tick();
 
-        // First packet is the Execute setting, then seven feedback readings from the file.
-        var expectedValues = new[] { 80.0, 75.0, 80.0, 85.0, 75.0, 80.0, 85.0, 75.0 };
+        // First packet is the Execute setting, then nine feedback readings from the file.
+        var expectedValues = new[] { 80.0, 75.0, 80.0, 85.0, 80.0, 40.0, 15.0, 60.0, 80.0, 75.0 };
         CollectionAssert.AreEqual(expectedValues, received.Select(p => p.Value).ToArray());
         Assert.IsTrue(controller.IsOn);
         Assert.AreEqual(80.0, controller.Setting);
