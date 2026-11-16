@@ -40,6 +40,9 @@ public abstract class Actuator : Device
 
     public void Execute(bool on, double setting)
     {
+        // Check first so a rejected command changes no state and publishes nothing.
+        ValidateSetting(setting);
+
         IsOn = on;
         Setting = setting;
 
@@ -48,6 +51,12 @@ public abstract class Actuator : Device
 
         _bus.Publish(_latestPacket);
     }
+
+    /*
+     * Purpose: Let a specific actuator reject an invalid setting before Execute changes anything.
+     * The default accepts every setting, so existing actuators keep their current behaviour.
+     */
+    protected virtual void ValidateSetting(double setting) { }
 
     public TelemetryPacket Tick()
     {
