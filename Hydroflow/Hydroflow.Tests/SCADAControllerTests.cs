@@ -1,4 +1,5 @@
 ﻿using HydroFlow.Core;
+using HydroFlow.Devices;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,6 +25,7 @@ namespace Hydroflow.Tests
                 LoggedPackets.Add(packet);
             }
         }
+
         [TestMethod]
         public void UnknownDevice_ReturnsNull()
         {
@@ -278,5 +280,7 @@ namespace Hydroflow.Tests
             Assert.AreEqual("WL-01", alarms[0].DeviceId);
             Assert.AreEqual("PH-01", alarms[1].DeviceId);
         }
+
+        
     }
 }
