@@ -55,7 +55,8 @@ namespace HydroFlow.Controller
                     packet.Value,
                     packet.Unit,
                     DateTime.UtcNow,
-                    newStatus
+                    newStatus,
+                    message
                 );
 
                 bus.Publish(alarmPacket);
@@ -169,12 +170,7 @@ namespace HydroFlow.Controller
 
         public TelemetryPacket? GetLatest(string deviceId)
         {
-            if (packets.ContainsKey(deviceId))
-            {
-                return packets[deviceId];
-            }
-
-            return null;
+            return packets.TryGetValue(deviceId, out TelemetryPacket? p ) ? p : null;
         }
     }
 }
