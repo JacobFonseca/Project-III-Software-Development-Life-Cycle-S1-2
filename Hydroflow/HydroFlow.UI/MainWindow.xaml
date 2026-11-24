@@ -13,7 +13,16 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:HydroFlow.UI"
         mc:Ignorable="d"
-        Title="HydroFlow SCADA" Height="600" Width="1100">
+        Title="HydroFlow SCADA" Height="800" Width="1100">
+    <Window.Resources>
+        <!-- HF-97: each device row is drawn as a DeviceTile in the tiles slot. -->
+        <DataTemplate x:Key="DeviceTileTemplate">
+            <local:DeviceTile />
+        </DataTemplate>
+        <ItemsPanelTemplate x:Key="DeviceTilePanel">
+            <WrapPanel />
+        </ItemsPanelTemplate>
+    </Window.Resources>
     <Grid Margin="12">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
@@ -27,14 +36,31 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Latest device readings" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8" />
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+            <TextBlock Text="Latest device readings" FontSize="18" FontWeight="SemiBold" />
+
+            <!-- HF-97: system health, "All normal" or "N alerts". -->
+            <TextBlock x:Name="HealthText" Text="{Binding HealthText}" FontSize="18" Margin="16,0,0,0">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="#2E7D32" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasActiveAlerts}" Value="True">
+                                <Setter Property="Foreground" Value="#C62828" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </StackPanel>
 
         <!-- HF-57: empty slots for the team's UserControls. Each owner's control is placed here from code. -->
         <!-- Alarm banner (Afsana, HF-67). -->
         <ContentControl x:Name="AlarmBannerSlot" Grid.Row="1" />
 
         <!-- Device tiles (Jacob, HF-97). -->
-        <ContentControl x:Name="DeviceTilesSlot" Grid.Row="2" />
+        <ContentControl x:Name="DeviceTilesSlot" Grid.Row="2" Margin="0,0,0,8" />
 
         <!-- Control panel (Kadeema, HF-64). -->
         <ContentControl x:Name="ControlPanelSlot" Grid.Row="0" Grid.RowSpan="5" Grid.Column="1" Margin="12,0,0,0" />
@@ -58,7 +84,8 @@
                 <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="1.5*" />
                 <DataGridTextColumn Header="Value" Binding="{Binding Value, StringFormat={}{0:0.##}}" Width="*" />
                 <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" Width="*" />
-                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" />
+                <!-- HF-97: the device's current status from the controller, same as its tile. -->
+                <DataGridTextColumn Header="Status" Binding="{Binding AlertStatus}" Width="*" />
                 <DataGridTextColumn Header="Last updated" Binding="{Binding LastUpdatedLocal, StringFormat={}{0:h:mm:ss tt}, TargetNullValue=Waiting}" Width="*" />
             </DataGrid.Columns>
         </DataGrid>
