@@ -4,8 +4,9 @@ public enum DeviceStatus { Normal, Warning, Alarm }
 
 public record TelemetryPacket(
     string DeviceId,
-    string Type,          // "Sensor" or "Actuator"
+    string Type,          // "Sensor", "Actuator", "Alarm" or "Command"
     double Value,
     string Unit,
     DateTime Timestamp,
-    DeviceStatus Status);
+    DeviceStatus Status,
+    string Message = "");
