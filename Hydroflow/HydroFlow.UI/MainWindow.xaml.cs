@@ -70,6 +70,9 @@ namespace HydroFlow.UI
          */
         private void OnPacketReceived(TelemetryPacket packet)
         {
+            // Alarm and Command packets reuse the device ID, so only readings may change a row.
+            if (packet.Type != "Sensor" && packet.Type != "Actuator") return;
+
             // MessageBus calls subscribers on the publisher's thread, so move to the UI thread first.
             if (!Dispatcher.CheckAccess())
             {
