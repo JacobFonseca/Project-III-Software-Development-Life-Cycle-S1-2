@@ -31,3 +31,4 @@ bld/
 *.db
 *.db-shm
 *.db-wal
+*.db-journal

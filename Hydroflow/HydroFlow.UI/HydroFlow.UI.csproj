@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HydroFlow.Controller\HydroFlow.Controller.csproj" />
+    <ProjectReference Include="..\HydroFlow.Logging\HydroFlow.Logging.csproj" />
     <ProjectReference Include="..\Hydroflow.Core\Hydroflow.Core.csproj" />
   </ItemGroup>
 
