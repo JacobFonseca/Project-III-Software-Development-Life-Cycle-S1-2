@@ -4,7 +4,7 @@
     Project: HydroFlow SCADA
     Task: HF-38
 
-    Read-only window that lists the latest reading from each HydroFlow device.
+    Lists the latest reading from each HydroFlow device and hosts the team's dashboard controls.
 -->
 <Window x:Class="HydroFlow.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -13,9 +13,15 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:HydroFlow.UI"
         mc:Ignorable="d"
-        Title="HydroFlow SCADA" Height="450" Width="800">
+        Title="HydroFlow SCADA" Height="600" Width="1100">
     <Grid Margin="12">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
@@ -23,8 +29,18 @@
 
         <TextBlock Grid.Row="0" Text="Latest device readings" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8" />
 
+        <!-- HF-57: empty slots for the team's UserControls. Each owner's control is placed here from code. -->
+        <!-- Alarm banner (Afsana, HF-67). -->
+        <ContentControl x:Name="AlarmBannerSlot" Grid.Row="1" />
+
+        <!-- Device tiles (Jacob, HF-97). -->
+        <ContentControl x:Name="DeviceTilesSlot" Grid.Row="2" />
+
+        <!-- Control panel (Kadeema, HF-64). -->
+        <ContentControl x:Name="ControlPanelSlot" Grid.Row="0" Grid.RowSpan="5" Grid.Column="1" Margin="12,0,0,0" />
+
         <!-- Read-only: one row per device ID, refreshed when that device publishes. -->
-        <DataGrid x:Name="ReadingsGrid" Grid.Row="1"
+        <DataGrid x:Name="ReadingsGrid" Grid.Row="3"
                   AutoGenerateColumns="False" IsReadOnly="True"
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   HeadersVisibility="Column" SelectionMode="Single">
@@ -36,7 +52,7 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <TextBlock x:Name="EmptyMessage" Grid.Row="2" Margin="0,8,0,0"
+        <TextBlock x:Name="EmptyMessage" Grid.Row="4" Margin="0,8,0,0"
                    Text="Waiting for device readings." Foreground="Gray" />
     </Grid>
 </Window>
