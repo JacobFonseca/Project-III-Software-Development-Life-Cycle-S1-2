@@ -11,11 +11,15 @@ using System.IO;
 using System.Windows;
 using HydroFlow.Core;
 using HydroFlow.Devices;
+using HydroFlow.Controller;
 
 namespace HydroFlow.UI
 {
     public partial class App : Application
     {
+        // Kept for the lifetime of the app so thresholds are evaluated on every tick.
+        private SCADAController? _controller;
+
         /*
          * Purpose: Create the simulation from the copied data files and show the monitoring window.
          */
@@ -27,10 +31,15 @@ namespace HydroFlow.UI
             string dataFolder = Path.Combine(AppContext.BaseDirectory, "data");
             var simulation = new Simulation(file => new LoopingFileReader(Path.Combine(dataFolder, file)));
 
+            // HF-100: evaluates sensor readings and publishes Alarm packets on the same bus.
+            _controller = new SCADAController(simulation.Bus);
+
             var window = new MainWindow();
             window.Start(simulation);
             window.Show();
         }
     }
-
 }
+
+
+
