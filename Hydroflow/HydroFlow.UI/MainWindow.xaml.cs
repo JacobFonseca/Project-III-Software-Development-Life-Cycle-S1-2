@@ -50,6 +50,13 @@ namespace HydroFlow.UI
 
             ShowReadingsFrom(simulation.Bus);
 
+            // HF-67: show active alarms from the Alarm packets on the same bus.
+            var tracker = new AlarmTracker(simulation.Bus);
+            var banner = new AlarmBanner();
+            banner.Initialize(tracker);
+            AlarmBannerSlot.Content = banner;
+
+           
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _timer.Tick += (_, _) => simulation.Tick();
             _timer.Start();
