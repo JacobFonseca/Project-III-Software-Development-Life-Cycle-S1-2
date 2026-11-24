@@ -238,4 +238,89 @@ public class SqliteTelemetryLoggerTests
 
         Assert.AreEqual(0, CountRows());
     }
+
+    /*
+     * Purpose: Check that LoggedAt is written as UTC and is separate from the packet's own time.
+     */
+    [TestMethod]
+    public void Log_SavesLoggedAtAsUtcSeparateFromPacketTime()
+    {
+        var packetTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        DateTime before = DateTime.UtcNow;
+
+        using (var logger = new SqliteTelemetryLogger(_databasePath))
+            logger.Log(new TelemetryPacket("PH-01", "Sensor", 6.0, "pH", packetTime, DeviceStatus.Normal));
+
+        using var connection = new SqliteConnection(
+            new SqliteConnectionStringBuilder { DataSource = _databasePath, Pooling = false }.ToString());
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT Timestamp, LoggedAt FROM Telemetry;";
+        using var reader = command.ExecuteReader();
+        Assert.IsTrue(reader.Read());
+
+        Assert.AreEqual("2026-01-01T00:00:00.0000000Z", reader.GetString(0));
+        StringAssert.EndsWith(reader.GetString(1), "Z");
+        DateTime loggedAt = DateTime.Parse(reader.GetString(1), null, System.Globalization.DateTimeStyles.RoundtripKind);
+        Assert.IsTrue(loggedAt >= before.AddSeconds(-1));
+    }
+
+    /*
+     * Purpose: Check that a database error is counted and reported instead of thrown,
+     * so the simulation tick keeps running.
+     */
+    [TestMethod]
+    public void Log_DatabaseError_ReportsFailureWithoutThrowing()
+    {
+        using var logger = new SqliteTelemetryLogger(_databasePath);
+        Exception? reported = null;
+        int reportCount = 0;
+        logger.LogFailed += ex => { reported = ex; reportCount++; };
+
+        // Remove the table from outside the logger so the next insert fails.
+        using (var connection = new SqliteConnection(
+            new SqliteConnectionStringBuilder { DataSource = _databasePath, Pooling = false }.ToString()))
+        {
+            connection.Open();
+            using var drop = connection.CreateCommand();
+            drop.CommandText = "DROP TABLE Telemetry;";
+            drop.ExecuteNonQuery();
+        }
+
+        logger.Log(new TelemetryPacket("NUT-01", "Actuator", 50, "mL/min", DateTime.UtcNow, DeviceStatus.Normal));
+
+        Assert.AreEqual(1, logger.FailedCount);
+        Assert.AreEqual(1, reportCount);
+        Assert.IsInstanceOfType(reported, typeof(SqliteException));
+        Assert.AreSame(reported, logger.LastError);
+    }
+
+    /*
+     * Purpose: Check that a database from before LoggedAt existed keeps its rows and gets the new column.
+     */
+    [TestMethod]
+    public void Constructor_OldDatabaseWithoutLoggedAt_KeepsRowsAndAddsColumn()
+    {
+        using (var connection = new SqliteConnection(
+            new SqliteConnectionStringBuilder { DataSource = _databasePath, Pooling = false }.ToString()))
+        {
+            connection.Open();
+            using var create = connection.CreateCommand();
+            create.CommandText =
+                @"CREATE TABLE Telemetry (Id INTEGER PRIMARY KEY AUTOINCREMENT, DeviceId TEXT NOT NULL, Type TEXT NOT NULL,
+                    Value REAL NOT NULL, Unit TEXT NOT NULL, Timestamp TEXT NOT NULL, Status TEXT NOT NULL,
+                    Message TEXT NOT NULL DEFAULT '');
+                  INSERT INTO Telemetry (DeviceId, Type, Value, Unit, Timestamp, Status, Message)
+                  VALUES ('WL-01', 'Sensor', 50, '%', '2026-11-24T05:29:28.0000000Z', 'Normal', '');";
+            create.ExecuteNonQuery();
+        }
+
+        using var logger = new SqliteTelemetryLogger(_databasePath);
+        logger.Log(new TelemetryPacket("WL-01", "Sensor", 45, "%", DateTime.UtcNow, DeviceStatus.Normal));
+
+        var saved = logger.ReadAll();
+        Assert.AreEqual(2, saved.Count);
+        Assert.AreEqual(50, saved[0].Value);
+        Assert.AreEqual(0, logger.FailedCount);
+    }
 }

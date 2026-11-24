@@ -7,6 +7,7 @@
  * Saves every packet published on the MessageBus to a local SQLite database.
  */
 
+using System.Diagnostics;
 using System.Globalization;
 using HydroFlow.Core;
 using Microsoft.Data.Sqlite;
@@ -23,6 +24,8 @@ public sealed class SqliteTelemetryLogger : ITelemetryLogger, IDisposable
     private readonly SqliteConnection _connection;
     private bool _attached;
     private bool _disposed;
+    private int _failedCount;
+    private Exception? _lastError;
 
     /*
      * Purpose: Open (or create) the database file and make sure the Telemetry table exists.
@@ -56,9 +59,27 @@ public sealed class SqliteTelemetryLogger : ITelemetryLogger, IDisposable
                 Unit      TEXT    NOT NULL,
                 Timestamp TEXT    NOT NULL,
                 Status    TEXT    NOT NULL,
-                Message   TEXT    NOT NULL DEFAULT ''
+                Message   TEXT    NOT NULL DEFAULT '',
+                LoggedAt  TEXT    NOT NULL DEFAULT ''
               );";
         create.ExecuteNonQuery();
+
+        AddLoggedAtColumnIfMissing();
+    }
+
+    // Raised when a packet could not be saved. Not sent on the bus, so a failure can't loop back into Log.
+    public event Action<Exception>? LogFailed;
+
+    // Number of packets that could not be saved since the logger started.
+    public int FailedCount
+    {
+        get { lock (_lock) { return _failedCount; } }
+    }
+
+    // The most recent save error, or null if every save worked.
+    public Exception? LastError
+    {
+        get { lock (_lock) { return _lastError; } }
     }
 
     // Full path of the database file this logger writes to.
@@ -91,11 +112,15 @@ public sealed class SqliteTelemetryLogger : ITelemetryLogger, IDisposable
 
     /*
      * Purpose: Save one packet of any type (Sensor, Actuator, Alarm or Command) as one row.
-     * Timestamps are stored as UTC in round trip format so they read back exactly.
+     * Timestamp is the packet's own time. LoggedAt is when the row was written. Both are UTC.
+     * A database error is reported through LogFailed and Trace instead of being thrown,
+     * because Log runs inside the bus and an exception would stop the simulation tick.
      */
     public void Log(TelemetryPacket packet)
     {
         ArgumentNullException.ThrowIfNull(packet);
+
+        Exception? failure = null;
 
         lock (_lock)
         {
@@ -103,19 +128,55 @@ public sealed class SqliteTelemetryLogger : ITelemetryLogger, IDisposable
             if (_disposed)
                 return;
 
-            using var insert = _connection.CreateCommand();
-            insert.CommandText =
-                @"INSERT INTO Telemetry (DeviceId, Type, Value, Unit, Timestamp, Status, Message)
-                  VALUES ($deviceId, $type, $value, $unit, $timestamp, $status, $message);";
-            insert.Parameters.AddWithValue("$deviceId", packet.DeviceId);
-            insert.Parameters.AddWithValue("$type", packet.Type);
-            insert.Parameters.AddWithValue("$value", packet.Value);
-            insert.Parameters.AddWithValue("$unit", packet.Unit ?? "");
-            insert.Parameters.AddWithValue("$timestamp", ToUtc(packet.Timestamp).ToString("O", CultureInfo.InvariantCulture));
-            insert.Parameters.AddWithValue("$status", packet.Status.ToString());
-            insert.Parameters.AddWithValue("$message", packet.Message ?? "");
-            insert.ExecuteNonQuery();
+            try
+            {
+                Insert(packet);
+            }
+            catch (SqliteException ex)
+            {
+                _failedCount++;
+                _lastError = ex;
+                failure = ex;
+            }
         }
+
+        // Reported outside the lock so a handler can read FailedCount or LastError.
+        if (failure != null)
+        {
+            Trace.TraceError($"HydroFlow logger could not save {packet.Type} packet from {packet.DeviceId}: {failure.Message}");
+            LogFailed?.Invoke(failure);
+        }
+    }
+
+    // Values go in as parameters, so packet text is never pasted into the SQL.
+    private void Insert(TelemetryPacket packet)
+    {
+        using var insert = _connection.CreateCommand();
+        insert.CommandText =
+            @"INSERT INTO Telemetry (DeviceId, Type, Value, Unit, Timestamp, Status, Message, LoggedAt)
+              VALUES ($deviceId, $type, $value, $unit, $timestamp, $status, $message, $loggedAt);";
+        insert.Parameters.AddWithValue("$deviceId", packet.DeviceId);
+        insert.Parameters.AddWithValue("$type", packet.Type);
+        insert.Parameters.AddWithValue("$value", packet.Value);
+        insert.Parameters.AddWithValue("$unit", packet.Unit ?? "");
+        insert.Parameters.AddWithValue("$timestamp", ToUtc(packet.Timestamp).ToString("O", CultureInfo.InvariantCulture));
+        insert.Parameters.AddWithValue("$status", packet.Status.ToString());
+        insert.Parameters.AddWithValue("$message", packet.Message ?? "");
+        insert.Parameters.AddWithValue("$loggedAt", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+        insert.ExecuteNonQuery();
+    }
+
+    // A database made before LoggedAt was added gets the column, so old rows are kept.
+    private void AddLoggedAtColumnIfMissing()
+    {
+        using var columns = _connection.CreateCommand();
+        columns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Telemetry') WHERE name = 'LoggedAt';";
+        if (Convert.ToInt64(columns.ExecuteScalar()) > 0)
+            return;
+
+        using var alter = _connection.CreateCommand();
+        alter.CommandText = "ALTER TABLE Telemetry ADD COLUMN LoggedAt TEXT NOT NULL DEFAULT '';";
+        alter.ExecuteNonQuery();
     }
 
     /*
@@ -156,6 +217,7 @@ public sealed class SqliteTelemetryLogger : ITelemetryLogger, IDisposable
 
     /*
      * Purpose: Close the database connection. Later packets are ignored.
+     * IMessageBus has no Unsubscribe, so the subscription stays but does nothing after this.
      */
     public void Dispose()
     {

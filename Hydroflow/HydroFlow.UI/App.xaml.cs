@@ -36,8 +36,7 @@ namespace HydroFlow.UI
             var simulation = new Simulation(file => new LoopingFileReader(Path.Combine(dataFolder, file)));
 
             // HF-57: subscribed before the controller, so a reading is saved before the alarm it causes.
-            _logger = new SqliteTelemetryLogger(SqliteTelemetryLogger.GetDefaultPath());
-            _logger.Attach(simulation.Bus);
+            StartLogger(simulation.Bus);
 
             // HF-100: evaluates sensor readings and publishes Alarm packets on the same bus.
             _controller = new SCADAController(simulation.Bus);
@@ -45,6 +44,38 @@ namespace HydroFlow.UI
             var window = new MainWindow();
             window.Start(simulation);
             window.Show();
+        }
+
+        /*
+         * Purpose: Open hydroflow.db and subscribe the logger once.
+         * If the database can't be opened, the dashboard still runs and the user is told logging is off.
+         */
+        private void StartLogger(IMessageBus bus)
+        {
+            try
+            {
+                _logger = new SqliteTelemetryLogger(SqliteTelemetryLogger.GetDefaultPath());
+            }
+            catch (Exception ex) when (ex is Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException)
+            {
+                MessageBox.Show("Logging is off. hydroflow.db could not be opened:\n" + ex.Message,
+                    "HydroFlow logger", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // Only the first failure gets a message box, so a broken database can't flood the screen.
+            // Later failures are still counted in FailedCount and written to Trace.
+            bool warned = false;
+            _logger.LogFailed += ex =>
+            {
+                if (warned)
+                    return;
+                warned = true;
+                Dispatcher.InvokeAsync(() => MessageBox.Show("A packet could not be saved to hydroflow.db:\n" + ex.Message,
+                    "HydroFlow logger", MessageBoxButton.OK, MessageBoxImage.Warning));
+            };
+
+            _logger.Attach(bus);
         }
 
         /*
