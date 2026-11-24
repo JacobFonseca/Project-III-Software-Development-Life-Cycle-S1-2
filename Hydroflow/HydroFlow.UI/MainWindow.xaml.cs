@@ -14,6 +14,7 @@ using System.Windows.Threading;
 using HydroFlow.Core;
 using HydroFlow.Controller.Dashboard;
 using HydroFlow.Devices;
+using HydroFlow.Logging;
 
 namespace HydroFlow.UI
 {
@@ -27,6 +28,12 @@ namespace HydroFlow.UI
 
         // The window owns the only tick loop, because Simulation has no timer of its own.
         private DispatcherTimer? _timer;
+
+        // HF-63: only one diagnostics window is open at a time.
+        private Window? _diagnosticsWindow;
+
+        // HF-63: set by App. Null when hydroflow.db could not be opened.
+        public SqliteTelemetryLogger? Logger { get; set; }
 
         /*
          * Purpose: Set up the window and connect the readings table to its rows.
@@ -126,6 +133,33 @@ namespace HydroFlow.UI
                 return;
 
             _dashboard.ApplyAlarm(packet);
+        }
+
+        /*
+         * Purpose: Open the logger diagnostics view, or bring it to the front if it is already open.
+         */
+        private void DiagnosticsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_diagnosticsWindow is not null)
+            {
+                _diagnosticsWindow.Activate();
+                return;
+            }
+
+            var view = new LoggerDiagnosticsView();
+            view.ShowLogger(Logger);
+
+            // Owned by this window, so it closes with the dashboard.
+            _diagnosticsWindow = new Window
+            {
+                Title = "HydroFlow logger diagnostics",
+                Content = view,
+                Owner = this,
+                Width = 760,
+                Height = 480
+            };
+            _diagnosticsWindow.Closed += (_, _) => _diagnosticsWindow = null;
+            _diagnosticsWindow.Show();
         }
 
         /*

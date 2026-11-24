@@ -41,7 +41,8 @@ namespace HydroFlow.UI
             // HF-100: evaluates sensor readings and publishes Alarm packets on the same bus.
             _controller = new SCADAController(simulation.Bus);
 
-            var window = new MainWindow();
+            // HF-63: the window's diagnostics view reads from the same logger.
+            var window = new MainWindow { Logger = _logger };
             window.Start(simulation);
             window.Show();
         }
