@@ -13,6 +13,7 @@ using HydroFlow.Core;
 using HydroFlow.Devices;
 using HydroFlow.Controller;
 using HydroFlow.Logging;
+using System.Linq;
 
 namespace HydroFlow.UI
 {
@@ -23,6 +24,9 @@ namespace HydroFlow.UI
 
         // HF-57: one logger for the whole app, closed in OnExit.
         private SqliteTelemetryLogger? _logger;
+
+        // HF-8: turns the exhaust fan on and off from humidity alarms.
+        private ClimateAutomation? _climate;
 
         /*
          * Purpose: Create the simulation from the copied data files and show the monitoring window.
@@ -40,6 +44,11 @@ namespace HydroFlow.UI
 
             // HF-100: evaluates sensor readings and publishes Alarm packets on the same bus.
             _controller = new SCADAController(simulation.Bus);
+                        
+            // HF-8: humidity alarms switch FAN-01 through the Command pattern.
+            var invoker = new CommandInvoker(simulation.Bus);
+            var fan = simulation.Actuators.First(a => a.DeviceId == "FAN-01");
+            _climate = new ClimateAutomation(simulation.Bus, invoker, fan);
 
             var window = new MainWindow();
             window.Start(simulation);
