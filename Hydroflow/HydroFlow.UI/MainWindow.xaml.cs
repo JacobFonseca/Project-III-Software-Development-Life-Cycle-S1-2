@@ -4,21 +4,22 @@
  * Project: HydroFlow SCADA
  * Task: HF-38
  *
- * Displays the latest reading from each HydroFlow device.
+ * Displays the latest reading from each HydroFlow device, grouped by module.
  */
 
-using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Threading;
 using HydroFlow.Core;
+using HydroFlow.Controller.Dashboard;
 using HydroFlow.Devices;
 
 namespace HydroFlow.UI
 {
     public partial class MainWindow : Window
     {
-        // One row per device ID. A new packet replaces that device's row.
-        private readonly ObservableCollection<TelemetryPacket> _readings = new();
+        // One row per device ID, grouped by module. A new reading updates that device's row.
+        private readonly DashboardReadings _dashboard = new();
 
         // IMessageBus has no Unsubscribe, so packets that arrive after the window closes are ignored.
         private bool _isClosed;
@@ -32,7 +33,11 @@ namespace HydroFlow.UI
         public MainWindow()
         {
             InitializeComponent();
-            ReadingsGrid.ItemsSource = _readings;
+
+            // HF-59: the grid shows rows under a heading for each module.
+            var view = CollectionViewSource.GetDefaultView(_dashboard.Rows);
+            view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(DashboardRow.Module)));
+            ReadingsGrid.ItemsSource = view;
             Closed += OnWindowClosed;
         }
 
@@ -47,6 +52,9 @@ namespace HydroFlow.UI
             // Only one tick loop may run.
             if (_timer is not null)
                 throw new InvalidOperationException("The simulation is already running.");
+
+            // All registered devices are listed right away, then fill in as readings arrive.
+            _dashboard.AddDevices(simulation.Sensors.Cast<Device>().Concat(simulation.Actuators));
 
             ShowReadingsFrom(simulation.Bus);
 
@@ -90,17 +98,8 @@ namespace HydroFlow.UI
             if (_isClosed)
                 return;
 
-            for (int i = 0; i < _readings.Count; i++)
-            {
-                if (_readings[i].DeviceId == packet.DeviceId)
-                {
-                    _readings[i] = packet;
-                    return;
-                }
-            }
-
-            _readings.Add(packet);
-            EmptyMessage.Visibility = Visibility.Collapsed;
+            if (_dashboard.ApplyReading(packet))
+                EmptyMessage.Visibility = Visibility.Collapsed;
         }
 
         /*

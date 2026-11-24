@@ -4,7 +4,7 @@
     Project: HydroFlow SCADA
     Task: HF-38
 
-    Lists the latest reading from each HydroFlow device and hosts the team's dashboard controls.
+    Lists the latest reading from each HydroFlow device by module and hosts the team's dashboard controls.
 -->
 <Window x:Class="HydroFlow.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -39,16 +39,27 @@
         <!-- Control panel (Kadeema, HF-64). -->
         <ContentControl x:Name="ControlPanelSlot" Grid.Row="0" Grid.RowSpan="5" Grid.Column="1" Margin="12,0,0,0" />
 
-        <!-- Read-only: one row per device ID, refreshed when that device publishes. -->
+        <!-- Read-only: one row per device ID, grouped by module (HF-59), refreshed when that device publishes. -->
         <DataGrid x:Name="ReadingsGrid" Grid.Row="3"
                   AutoGenerateColumns="False" IsReadOnly="True"
-                  CanUserAddRows="False" CanUserDeleteRows="False"
+                  CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False"
                   HeadersVisibility="Column" SelectionMode="Single">
+            <DataGrid.GroupStyle>
+                <GroupStyle>
+                    <GroupStyle.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Margin="4,8,0,2" />
+                        </DataTemplate>
+                    </GroupStyle.HeaderTemplate>
+                </GroupStyle>
+            </DataGrid.GroupStyle>
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Device ID" Binding="{Binding DeviceId}" Width="*" />
+                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="1.5*" />
                 <DataGridTextColumn Header="Value" Binding="{Binding Value, StringFormat={}{0:0.##}}" Width="*" />
                 <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" Width="*" />
                 <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" />
+                <DataGridTextColumn Header="Last updated" Binding="{Binding LastUpdatedLocal, StringFormat={}{0:h:mm:ss tt}, TargetNullValue=Waiting}" Width="*" />
             </DataGrid.Columns>
         </DataGrid>
 
