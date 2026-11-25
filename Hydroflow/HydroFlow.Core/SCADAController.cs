@@ -18,12 +18,22 @@ namespace HydroFlow.Controller
         private readonly Dictionary<string, DeviceStatus> previousStatuses = new();
         private readonly IMessageBus bus;
 
-        public SCADAController(IMessageBus bus)
+        // Used for automatic water refill.
+        private readonly CommandInvoker? invoker;
+        private readonly Actuator? waterValve;
+
+        public SCADAController(
+    IMessageBus bus,
+    CommandInvoker? invoker = null,
+    Actuator? waterValve = null)
         {
             this.bus = bus ?? throw new ArgumentNullException(nameof(bus));
+
+            this.invoker = invoker;
+            this.waterValve = waterValve;
+
             bus.Subscribe(SavePacket);
         }
-
         private void SavePacket(TelemetryPacket packet)
         {
             // Only evaluate sensor readings.
@@ -33,8 +43,11 @@ namespace HydroFlow.Controller
             // Calculate the status using the sensor thresholds.
             DeviceStatus newStatus = CheckStatus(packet);
 
-            // Save the latest sensor reading.
-            packets[packet.DeviceId] = packet;
+            // Save the latest sensor reading with its evaluated status.
+            packets[packet.DeviceId] = packet with
+            {
+                Status = newStatus
+            };
 
             // A new device starts with an assumed Normal status.
             DeviceStatus oldStatus = previousStatuses.TryGetValue(
@@ -60,6 +73,32 @@ namespace HydroFlow.Controller
                 );
 
                 bus.Publish(alarmPacket);
+            }
+                // Automatically control the water valve.
+                if (packet.DeviceId == "WL-01")
+                {
+                    ControlWaterRefill(newStatus);
+                }
+        }
+
+        private void ControlWaterRefill(DeviceStatus status)
+        {
+            // Automatic refill requires a valve and command invoker.
+            if (invoker == null || waterValve == null)
+                return;
+
+            // Open the valve when the water level is too low.
+            if (status == DeviceStatus.Alarm && !waterValve.IsOn)
+            {
+                invoker.Run(new ActuatorCommand(
+                    waterValve, true, 1));
+            }
+
+            // Close the valve when the water level returns to normal.
+            else if (status == DeviceStatus.Normal && waterValve.IsOn)
+            {
+                invoker.Run(new ActuatorCommand(
+                    waterValve, false, 0));
             }
         }
 
