@@ -36,7 +36,11 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+        <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="False">
+            <!-- HF-63: opens the logger diagnostics view in its own window. -->
+            <Button x:Name="DiagnosticsButton" DockPanel.Dock="Right" Content="Logger diagnostics"
+                    Padding="10,2" VerticalAlignment="Center" Click="DiagnosticsButton_Click" />
+
             <TextBlock Text="Latest device readings" FontSize="18" FontWeight="SemiBold" />
 
             <!-- HF-97: system health, "All normal" or "N alerts". -->
@@ -53,7 +57,7 @@
                     </Style>
                 </TextBlock.Style>
             </TextBlock>
-        </StackPanel>
+        </DockPanel>
 
         <!-- HF-57: empty slots for the team's UserControls. Each owner's control is placed here from code. -->
         <!-- Alarm banner (Afsana, HF-67). -->

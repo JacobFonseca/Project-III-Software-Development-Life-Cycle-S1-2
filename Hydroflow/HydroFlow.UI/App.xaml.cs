@@ -50,7 +50,8 @@ namespace HydroFlow.UI
             var fan = simulation.Actuators.First(a => a.DeviceId == "FAN-01");
             _climate = new ClimateAutomation(simulation.Bus, invoker, fan);
 
-            var window = new MainWindow();
+            // HF-63: the window's diagnostics view reads from the same logger.
+            var window = new MainWindow { Logger = _logger };
             window.Start(simulation);
             window.Show();
         }

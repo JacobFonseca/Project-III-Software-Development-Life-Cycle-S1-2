@@ -6,6 +6,7 @@
  *
  * Tests that the SQLite logger saves every packet type, keeps rows after a restart,
  * and subscribes to the bus only once.
+ * HF-63: also tests the bounded reads used by the diagnostics view.
  */
 
 using HydroFlow.Controller;
@@ -322,5 +323,99 @@ public class SqliteTelemetryLoggerTests
         Assert.AreEqual(2, saved.Count);
         Assert.AreEqual(50, saved[0].Value);
         Assert.AreEqual(0, logger.FailedCount);
+    }
+
+    // Saves count packets, cycling through the four packet types.
+    private static void SaveMixedPackets(SqliteTelemetryLogger logger, int count)
+    {
+        string[] types = { "Sensor", "Actuator", "Alarm", "Command" };
+        for (int i = 0; i < count; i++)
+            logger.Log(new TelemetryPacket("DEV-" + i, types[i % 4], i, "u", DateTime.UtcNow, DeviceStatus.Normal, "msg " + i));
+    }
+
+    /*
+     * Purpose: Check that ReadRecent returns the newest rows first and no more than the limit.
+     */
+    [TestMethod]
+    public void ReadRecent_MoreRowsThanLimit_ReturnsNewestFirst()
+    {
+        using var logger = new SqliteTelemetryLogger(_databasePath);
+        SaveMixedPackets(logger, 20);
+
+        var recent = logger.ReadRecent(5);
+
+        Assert.AreEqual(5, recent.Count);
+        Assert.AreEqual("DEV-19", recent[0].DeviceId);
+        Assert.AreEqual("DEV-15", recent[4].DeviceId);
+    }
+
+    /*
+     * Purpose: Check that ReadRecent can return only the packet types asked for.
+     */
+    [TestMethod]
+    public void ReadRecent_WithTypes_ReturnsOnlyThoseTypes()
+    {
+        using var logger = new SqliteTelemetryLogger(_databasePath);
+        SaveMixedPackets(logger, 20);
+
+        var recent = logger.ReadRecent(50, "Alarm", "Command");
+
+        Assert.AreEqual(10, recent.Count);
+        Assert.IsTrue(recent.All(p => p.Type == "Alarm" || p.Type == "Command"));
+        Assert.AreEqual("msg 19", recent[0].Message);
+    }
+
+    /*
+     * Purpose: Check that a limit above MaxRecentRows is capped.
+     */
+    [TestMethod]
+    public void ReadRecent_LimitAboveMax_IsCapped()
+    {
+        using var logger = new SqliteTelemetryLogger(_databasePath);
+        SaveMixedPackets(logger, SqliteTelemetryLogger.MaxRecentRows + 10);
+
+        var recent = logger.ReadRecent(int.MaxValue);
+
+        Assert.AreEqual(SqliteTelemetryLogger.MaxRecentRows, recent.Count);
+    }
+
+    /*
+     * Purpose: Check that a limit below 1 is rejected.
+     */
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(-1)]
+    public void ReadRecent_LimitBelowOne_ThrowsArgumentOutOfRangeException(int limit)
+    {
+        using var logger = new SqliteTelemetryLogger(_databasePath);
+
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => logger.ReadRecent(limit));
+    }
+
+    /*
+     * Purpose: Check that a type name is treated as a value, not as part of the SQL.
+     */
+    [TestMethod]
+    public void ReadRecent_TypeWithQuote_ReturnsNothingAndKeepsTable()
+    {
+        using var logger = new SqliteTelemetryLogger(_databasePath);
+        SaveMixedPackets(logger, 4);
+
+        var recent = logger.ReadRecent(10, "Alarm'; DROP TABLE Telemetry; --");
+
+        Assert.AreEqual(0, recent.Count);
+        Assert.AreEqual(4, logger.CountRows());
+    }
+
+    /*
+     * Purpose: Check that CountRows matches the number of saved packets.
+     */
+    [TestMethod]
+    public void CountRows_AfterSaving_MatchesSaved()
+    {
+        using var logger = new SqliteTelemetryLogger(_databasePath);
+        SaveMixedPackets(logger, 7);
+
+        Assert.AreEqual(7, logger.CountRows());
     }
 }

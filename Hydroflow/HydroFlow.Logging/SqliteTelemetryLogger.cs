@@ -197,22 +197,88 @@ public sealed class SqliteTelemetryLogger : ITelemetryLogger, IDisposable
 
             using var reader = select.ExecuteReader();
             while (reader.Read())
-            {
-                DateTime timestamp = DateTime.Parse(
-                    reader.GetString(4), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
-
-                packets.Add(new TelemetryPacket(
-                    reader.GetString(0),
-                    reader.GetString(1),
-                    reader.GetDouble(2),
-                    reader.GetString(3),
-                    timestamp,
-                    Enum.Parse<DeviceStatus>(reader.GetString(5)),
-                    reader.GetString(6)));
-            }
+                packets.Add(ReadPacket(reader));
         }
 
         return packets;
+    }
+
+    // Turns one row (DeviceId, Type, Value, Unit, Timestamp, Status, Message) back into a packet.
+    private static TelemetryPacket ReadPacket(SqliteDataReader reader)
+    {
+        DateTime timestamp = DateTime.Parse(
+            reader.GetString(4), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+        return new TelemetryPacket(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetDouble(2),
+            reader.GetString(3),
+            timestamp,
+            Enum.Parse<DeviceStatus>(reader.GetString(5)),
+            reader.GetString(6));
+    }
+
+    // HF-63: largest number of rows ReadRecent returns, so the diagnostics view never loads the whole table.
+    public const int MaxRecentRows = 500;
+
+    /*
+     * Purpose: Read the newest saved packets, newest first, for the diagnostics view.
+     * limit is capped at MaxRecentRows. If types are given, only those packet types are returned.
+     */
+    public IReadOnlyList<TelemetryPacket> ReadRecent(int limit, params string[] types)
+    {
+        if (limit < 1)
+            throw new ArgumentOutOfRangeException(nameof(limit), "limit must be at least 1.");
+
+        limit = Math.Min(limit, MaxRecentRows);
+        var packets = new List<TelemetryPacket>();
+
+        lock (_lock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            using var select = _connection.CreateCommand();
+
+            // One parameter per type, so the type names are never pasted into the SQL.
+            string filter = "";
+            if (types is { Length: > 0 })
+            {
+                var names = new List<string>();
+                for (int i = 0; i < types.Length; i++)
+                {
+                    names.Add("$type" + i);
+                    select.Parameters.AddWithValue("$type" + i, types[i]);
+                }
+                filter = "WHERE Type IN (" + string.Join(", ", names) + ") ";
+            }
+
+            select.CommandText =
+                "SELECT DeviceId, Type, Value, Unit, Timestamp, Status, Message FROM Telemetry " +
+                filter + "ORDER BY Id DESC LIMIT $limit;";
+            select.Parameters.AddWithValue("$limit", limit);
+
+            using var reader = select.ExecuteReader();
+            while (reader.Read())
+                packets.Add(ReadPacket(reader));
+        }
+
+        return packets;
+    }
+
+    /*
+     * Purpose: Count the saved rows without loading them.
+     */
+    public long CountRows()
+    {
+        lock (_lock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            using var count = _connection.CreateCommand();
+            count.CommandText = "SELECT COUNT(*) FROM Telemetry;";
+            return Convert.ToInt64(count.ExecuteScalar());
+        }
     }
 
     /*
