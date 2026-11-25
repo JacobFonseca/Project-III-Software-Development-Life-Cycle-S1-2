@@ -4,7 +4,8 @@
  * Project: HydroFlow SCADA
  * Task: HF-59
  *
- * One device on the dashboard: its module, latest reading and when that reading arrived.
+ * One device on the dashboard: its module, latest reading, when that reading arrived,
+ * and its alert status from the controller (HF-97).
  */
 
 using System.ComponentModel;
@@ -18,6 +19,7 @@ public class DashboardRow : INotifyPropertyChanged
     private string _unit;
     private DeviceStatus _status = DeviceStatus.Normal;
     private DateTime? _lastUpdated;
+    private DeviceStatus _alertStatus = DeviceStatus.Normal;
 
     /*
      * Purpose: Create a row for a device that has not reported yet.
@@ -73,6 +75,13 @@ public class DashboardRow : INotifyPropertyChanged
     // LastUpdated in the computer's local time, for display.
     public DateTime? LastUpdatedLocal => _lastUpdated?.ToLocalTime();
 
+    // HF-97: status from the latest Alarm packet for this device. Readings never change it.
+    public DeviceStatus AlertStatus
+    {
+        get => _alertStatus;
+        private set => Set(ref _alertStatus, value, nameof(AlertStatus));
+    }
+
     /*
      * Purpose: Copy a reading packet into the row. Only DashboardReadings calls this.
      */
@@ -84,6 +93,14 @@ public class DashboardRow : INotifyPropertyChanged
         LastUpdated = packet.Timestamp.Kind == DateTimeKind.Local
             ? packet.Timestamp.ToUniversalTime()
             : DateTime.SpecifyKind(packet.Timestamp, DateTimeKind.Utc);
+    }
+
+    /*
+     * Purpose: Take the status from an Alarm packet. The reading values are left as they are.
+     */
+    internal void ApplyAlarm(TelemetryPacket packet)
+    {
+        AlertStatus = packet.Status;
     }
 
     // Returns true when the value changed, so callers only raise events for real changes.

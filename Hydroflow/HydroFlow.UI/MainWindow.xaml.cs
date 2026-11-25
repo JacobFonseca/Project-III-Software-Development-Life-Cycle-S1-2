@@ -8,6 +8,7 @@
  */
 
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Threading;
 using HydroFlow.Core;
@@ -38,6 +39,15 @@ namespace HydroFlow.UI
             var view = CollectionViewSource.GetDefaultView(_dashboard.Rows);
             view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(DashboardRow.Module)));
             ReadingsGrid.ItemsSource = view;
+
+            // HF-97: one tile per device in the tiles slot, and the health text in the header.
+            DeviceTilesSlot.Content = new ItemsControl
+            {
+                ItemsSource = _dashboard.Rows,
+                ItemTemplate = (DataTemplate)FindResource("DeviceTileTemplate"),
+                ItemsPanel = (ItemsPanelTemplate)FindResource("DeviceTilePanel")
+            };
+            HealthText.DataContext = _dashboard;
             Closed += OnWindowClosed;
         }
 
@@ -78,6 +88,9 @@ namespace HydroFlow.UI
         {
             ArgumentNullException.ThrowIfNull(bus);
             bus.Subscribe(OnPacketReceived);
+
+            // HF-97: alarms have their own handler, because the reading handler skips them.
+            bus.Subscribe(OnAlarmReceived);
         }
 
         /*
@@ -100,6 +113,26 @@ namespace HydroFlow.UI
 
             if (_dashboard.ApplyReading(packet))
                 EmptyMessage.Visibility = Visibility.Collapsed;
+        }
+
+        /*
+         * Purpose: Update the device's tile colour and the alert count from an Alarm packet.
+         * The device's latest reading is kept.
+         */
+        private void OnAlarmReceived(TelemetryPacket packet)
+        {
+            if (packet.Type != "Alarm") return;
+
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.InvokeAsync(() => OnAlarmReceived(packet));
+                return;
+            }
+
+            if (_isClosed)
+                return;
+
+            _dashboard.ApplyAlarm(packet);
         }
 
         /*
