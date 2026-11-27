@@ -7,8 +7,10 @@
  * SCADA controller that manages telemetry packets and evaluates device statuses.
  */
 using System;
+
 using System.Collections.Generic;
 using HydroFlow.Core;
+using System.Linq;
 
 namespace HydroFlow.Controller
 {
@@ -30,11 +32,13 @@ namespace HydroFlow.Controller
             if (packet.Type != "Sensor")
                 return;
 
-            // Calculate the status using the sensor thresholds.
             DeviceStatus newStatus = CheckStatus(packet);
 
-            // Save the latest sensor reading.
-            packets[packet.DeviceId] = packet;
+            // Save the latest sensor reading with its evaluated status.
+            packets[packet.DeviceId] = packet with
+            {
+                Status = newStatus
+            };
 
             // A new device starts with an assumed Normal status.
             DeviceStatus oldStatus = previousStatuses.TryGetValue(
