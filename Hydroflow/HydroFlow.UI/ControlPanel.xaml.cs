@@ -3,12 +3,13 @@ using System.Windows;
 using System.Windows.Controls;
 using HydroFlow.Core;
 using HydroFlow.Devices;
+using HydroFlow.Controller;
 
 namespace HydroFlow.UI;
 
 public partial class ControlPanel : UserControl
 {
-    private CommandInvoker? _invoker;
+    private ActuatorControlService? _controlService;
 
     public ControlPanel()
     {
@@ -19,10 +20,12 @@ public partial class ControlPanel : UserControl
     {
         ArgumentNullException.ThrowIfNull(simulation);
 
-        if (_invoker != null)
+        if (_controlService != null)
             return;
 
-        _invoker = new CommandInvoker(simulation.Bus);
+        _controlService = new ActuatorControlService(
+            simulation.Actuators,
+            simulation.Bus);
 
         ActuatorGrid.ItemsSource = simulation.Actuators;
 
@@ -55,7 +58,7 @@ public partial class ControlPanel : UserControl
 
     private void ExecuteCommand(object sender, bool on)
     {
-        if (_invoker == null)
+        if (_controlService == null)
             return;
 
         if (sender is not Button button ||
@@ -64,34 +67,14 @@ public partial class ControlPanel : UserControl
 
         try
         {
-            double setting = on ? GetOnSetting(actuator) : 0;
-
-            var command = new ActuatorCommand(
-                actuator, on, setting);
-
-            _invoker.Run(command);
+            CommandMessage.Text = _controlService.Set(
+                actuator.DeviceId, on);
 
             ActuatorGrid.Items.Refresh();
-
-            CommandMessage.Text = command.Description;
         }
         catch (ArgumentException ex)
         {
             CommandMessage.Text = ex.Message;
         }
-    }
-
-    private static double GetOnSetting(Actuator actuator)
-    {
-        return actuator.DeviceId switch
-        {
-            "FAN-01" => 1000,
-            "VLV-01" => 1,
-            "PHP-01" => 50,
-            "NUT-01" => 50,
-            "LED-01" => 80,
-            _ => throw new ArgumentException(
-                "Unknown actuator.")
-        };
     }
 }
